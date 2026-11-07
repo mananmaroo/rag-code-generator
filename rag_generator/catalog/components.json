@@ -1,0 +1,112 @@
+{
+  "schema_version": "1.0",
+  "components": [
+    {
+      "id": "parser.text", "version": "1.0.0", "category": "parser",
+      "name": "Plain text parser", "description": "TXT and Markdown extraction.",
+      "status": "implemented", "provides": ["document_text"],
+      "tradeoffs": "Fast and deterministic; preserves little layout."
+    },
+    {
+      "id": "parser.pdf", "version": "0.1.0", "category": "parser",
+      "name": "PDF parser", "description": "Page-aware PDF extraction with OCR signalling.",
+      "status": "proposed", "provides": ["document_text"],
+      "tradeoffs": "Good for digital PDFs; scanned pages need isolated OCR workers."
+    },
+    {
+      "id": "chunker.fixed", "version": "1.0.0", "category": "chunker",
+      "name": "Fixed overlap chunker", "description": "Reproducible word-window chunks.",
+      "status": "implemented", "requires": ["document_text"], "provides": ["chunks"],
+      "tradeoffs": "Cheap and measurable; may split semantic sections."
+    },
+    {
+      "id": "chunker.sentence", "version": "1.0.0", "category": "chunker",
+      "name": "Sentence-aware chunking", "description": "Packs complete sentences into bounded chunks.",
+      "status": "implemented", "requires": ["document_text"], "provides": ["chunks"],
+      "tradeoffs": "More readable evidence; sentence splitting varies for abbreviations and tables."
+    },
+    {
+      "id": "chunker.recursive", "version": "1.0.0", "category": "chunker",
+      "name": "Recursive paragraph chunking", "description": "Preserves paragraphs before applying word windows.",
+      "status": "implemented", "requires": ["document_text"], "provides": ["chunks"],
+      "tradeoffs": "Retains document structure; very long paragraphs still require hard splits."
+    },
+    {
+      "id": "embedding.hash", "version": "1.0.0", "category": "embedding",
+      "name": "Deterministic hash embeddings", "description": "Local plumbing/test embeddings.",
+      "status": "implemented", "requires": ["chunks"], "provides": ["embeddings"],
+      "embedding_dimensions": [384, 768, 1536],
+      "tradeoffs": "No API cost but not semantically meaningful; never use as a quality baseline."
+    },
+    {
+      "id": "embedding.openai", "version": "0.1.0", "category": "embedding",
+      "name": "OpenAI embeddings", "description": "Provider-backed semantic embeddings.",
+      "status": "implemented", "requires": ["chunks"], "provides": ["embeddings"],
+      "embedding_dimensions": [256, 512, 1024, 1536, 3072], "env": ["OPENAI_API_KEY"],
+      "tradeoffs": "Strong semantic retrieval; adds network latency and usage cost."
+    },
+    {
+      "id": "store.pgvector", "version": "1.0.0", "category": "vector_store",
+      "name": "PostgreSQL with pgvector", "description": "Vector and metadata persistence.",
+      "status": "implemented", "requires": ["embeddings"], "provides": ["vector_index", "metadata_filter"],
+      "embedding_dimensions": [384, 768, 1536, 3072], "env": ["DATABASE_URL", "POSTGRES_PASSWORD"],
+      "tradeoffs": "One operational system for vectors and metadata; tune indexes at scale."
+    },
+    {
+      "id": "retrieval.vector", "version": "1.0.0", "category": "retrieval",
+      "name": "Vector retrieval", "description": "Semantic nearest-neighbour retrieval.",
+      "status": "implemented", "requires": ["vector_index"], "provides": ["retrieval_results"],
+      "tradeoffs": "Simple and low latency; exact terms can be weaker than keyword search."
+    },
+    {
+      "id": "retrieval.hybrid", "version": "0.1.0", "category": "retrieval",
+      "name": "Hybrid retrieval", "description": "Vector plus keyword retrieval.",
+      "status": "proposed", "requires": ["vector_index", "keyword_index"],
+      "provides": ["ranked_lists"],
+      "tradeoffs": "Higher recall across semantic and exact queries; more tuning and latency."
+    },
+    {
+      "id": "fusion.rrf", "version": "0.1.0", "category": "fusion",
+      "name": "Reciprocal Rank Fusion", "description": "Rank-based list fusion.",
+      "status": "proposed", "requires": ["ranked_lists"], "provides": ["retrieval_results"],
+      "tradeoffs": "Robust across unlike score scales; adds fusion parameters."
+    },
+    {
+      "id": "queue.arq", "version": "0.1.0", "category": "queue",
+      "name": "Redis/ARQ ingestion", "description": "Restartable background ingestion.",
+      "status": "proposed", "requires": ["chunks"], "provides": ["async_ingestion"],
+      "runtime": "async", "env": ["REDIS_URL"],
+      "tradeoffs": "Resilient large-file processing; adds Redis and worker operations."
+    },
+    {
+      "id": "metric.hit_at_k", "version": "1.0.0", "category": "metric",
+      "name": "Hit@K", "description": "Whether any relevant chunk appears in the first K results.",
+      "status": "implemented", "requires": ["retrieval_results"], "provides": ["retrieval_metric"],
+      "tradeoffs": "Simple success signal; does not reward multiple relevant results."
+    },
+    {
+      "id": "metric.precision_at_k", "version": "1.0.0", "category": "metric",
+      "name": "Precision@K", "description": "Relevant results as a share of the first K results.",
+      "status": "implemented", "requires": ["retrieval_results"], "provides": ["retrieval_metric"],
+      "tradeoffs": "Measures result cleanliness; can penalize useful but unlabelled evidence."
+    },
+    {
+      "id": "metric.recall_at_k", "version": "1.0.0", "category": "metric",
+      "name": "Recall@K", "description": "Share of known relevant chunks retrieved in the first K.",
+      "status": "implemented", "requires": ["retrieval_results"], "provides": ["retrieval_metric"],
+      "tradeoffs": "Measures coverage; requires sufficiently complete relevance labels."
+    },
+    {
+      "id": "metric.mrr", "version": "1.0.0", "category": "metric",
+      "name": "MRR", "description": "Reciprocal rank of the first relevant result.",
+      "status": "implemented", "requires": ["retrieval_results"], "provides": ["retrieval_metric"],
+      "tradeoffs": "Good for first-answer position; ignores later relevant results."
+    },
+    {
+      "id": "metric.ndcg_at_k", "version": "1.0.0", "category": "metric",
+      "name": "nDCG@K", "description": "Position-discounted ranking quality normalized to the ideal ordering.",
+      "status": "implemented", "requires": ["retrieval_results"], "provides": ["retrieval_metric"],
+      "tradeoffs": "Sensitive to ranking order; harder to explain and label."
+    }
+  ]
+}

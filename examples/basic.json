@@ -1,0 +1,20 @@
+{
+  "project_name": "basic-rag-service",
+  "components": [
+    "parser.text",
+    "chunker.fixed",
+    "embedding.hash",
+    "store.pgvector",
+    "retrieval.vector",
+    "metric.hit_at_k",
+    "metric.recall_at_k",
+    "metric.mrr"
+  ],
+  "settings": {
+    "tier": "deterministic",
+    "runtime": "sync",
+    "embedding_dimensions": 1536,
+    "chunk_size_words": 350,
+    "chunk_overlap_words": 60
+  }
+}
