@@ -52,6 +52,9 @@ class WebTests(unittest.TestCase):
         self.assertIn(b"Your RAG pipeline", page)
         self.assertIn(b"Document parsing", page)
         self.assertIn(b"Coming soon", page)
+        self.assertIn(b"Provider credentials", page)
+        self.assertIn(b"Browser-local only", page)
+        self.assertIn(b"Learn about", page)
         _, _, body = self.request("/api/catalog")
         self.assertGreater(len(json.loads(body)["components"]), 5)
 
