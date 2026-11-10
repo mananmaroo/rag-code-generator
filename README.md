@@ -35,6 +35,13 @@ python -m rag_generator.cli serve
 Then open `http://127.0.0.1:8080`. Configurations are saved locally in SQLite and
 downloads are built in temporary directories before being returned as ZIP files.
 
+## Deploy to Vercel
+
+The repository includes a Python serverless entrypoint and `vercel.json`. Connect the
+GitHub repository to Vercel or deploy from the project root. On Vercel, saved
+configurations use ephemeral `/tmp` storage; validation and repository generation are
+stateless and fully supported.
+
 The product and generated service use only the Python standard library for their local
 deterministic paths. Their manifests record selected production integration points.
 
