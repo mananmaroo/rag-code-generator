@@ -27,10 +27,11 @@ class CompatibilityTests(unittest.TestCase):
         codes = {issue.code for issue in validate_selection(selection, self.catalog)}
         self.assertIn("secret_value", codes)
 
-    def test_proposed_component_cannot_generate(self):
+    def test_incomplete_selection_cannot_generate(self):
         selection = Selection("demo", ("parser.pdf",), {})
         codes = {issue.code for issue in validate_selection(selection, self.catalog)}
-        self.assertIn("not_implemented", codes)
+        self.assertIn("missing_category", codes)
+        self.assertNotIn("not_implemented", codes)
 
     def test_empty_selection_is_not_a_complete_repository(self):
         codes = {issue.code for issue in validate_selection(Selection("demo", (), {}), self.catalog)}
@@ -40,3 +41,14 @@ class CompatibilityTests(unittest.TestCase):
         selection = Selection("demo", (), {"chunk_size_words": 100, "chunk_overlap_words": 100})
         codes = {issue.code for issue in validate_selection(selection, self.catalog)}
         self.assertIn("invalid_chunking", codes)
+
+    def test_hybrid_retrieval_unlocks_rrf(self):
+        selection = Selection(
+            "hybrid",
+            (
+                "parser.text", "chunker.fixed", "embedding.hash", "store.pgvector",
+                "retrieval.hybrid", "fusion.rrf",
+            ),
+            {"runtime": "sync", "embedding_dimensions": 1536},
+        )
+        self.assertEqual(validate_selection(selection, self.catalog), [])

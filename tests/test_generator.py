@@ -51,3 +51,22 @@ class GeneratorTests(unittest.TestCase):
             generate_repository(selection, [catalog["embedding.openai"]], output)
             self.assertIn("openai>=1,<3", (output / "pyproject.toml").read_text())
             self.assertEqual((output / ".env.example").read_text(), "OPENAI_API_KEY=\n")
+
+    def test_pdf_parser_adds_real_adapter(self):
+        catalog = load_catalog()
+        selection = Selection("pdf-demo", ("parser.pdf",), {})
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "project"
+            generate_repository(selection, [catalog["parser.pdf"]], output)
+            self.assertIn("pypdf>=6,<7", (output / "pyproject.toml").read_text())
+            self.assertIn("def extract_pdf", (output / "src/pdf_demo/parsers.py").read_text())
+
+    def test_async_queue_adds_worker_and_redis(self):
+        catalog = load_catalog()
+        selection = Selection("queue-demo", ("queue.arq",), {"runtime": "async"})
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "project"
+            generate_repository(selection, [catalog["queue.arq"]], output)
+            self.assertIn("arq>=0.26,<1", (output / "pyproject.toml").read_text())
+            self.assertIn("redis:", (output / "docker-compose.yml").read_text())
+            self.assertIn("class WorkerSettings", (output / "src/queue_demo/worker.py").read_text())

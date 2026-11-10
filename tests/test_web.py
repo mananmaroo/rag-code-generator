@@ -48,7 +48,10 @@ class WebTests(unittest.TestCase):
 
     def test_catalog_and_ui(self):
         _, _, page = self.request("/")
-        self.assertIn(b"RAG Code Generator", page)
+        self.assertIn(b"RAG Studio", page)
+        self.assertIn(b"Your RAG pipeline", page)
+        self.assertIn(b"Document parsing", page)
+        self.assertIn(b"Coming soon", page)
         _, _, body = self.request("/api/catalog")
         self.assertGreater(len(json.loads(body)["components"]), 5)
 

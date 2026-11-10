@@ -28,12 +28,14 @@ def generate_repository(
         "component-lock.json": json.dumps(lock, indent=2) + "\n",
         "pyproject.toml": _project_toml(selection, package),
         "Dockerfile": _dockerfile(package),
-        "docker-compose.yml": _compose(),
+        "docker-compose.yml": _compose(selection),
         f"src/{package}/__init__.py": "",
         f"src/{package}/app.py": _app_source(),
+        f"src/{package}/parsers.py": _parsers_source(),
         f"src/{package}/pipeline.py": _pipeline_source(selection),
         f"src/{package}/embeddings.py": _embeddings_source(),
         f"src/{package}/retrieval.py": _retrieval_source(),
+        f"src/{package}/worker.py": _worker_source(),
         "tests/test_pipeline.py": _test_source(package),
         "docs/ARCHITECTURE.md": _generated_architecture(selection, components),
         "eval/README.md": _eval_readme(),
@@ -80,7 +82,14 @@ safe deterministic scaffold, not a claim that proposed external adapters are ins
 
 def _project_toml(selection: Selection, package: str) -> str:
     dist = re.sub(r"[^a-zA-Z0-9-]+", "-", selection.project_name).strip("-").lower()
-    dependencies = '["openai>=1,<3"]' if "embedding.openai" in selection.components else "[]"
+    dependencies: list[str] = []
+    if "embedding.openai" in selection.components:
+        dependencies.append("openai>=1,<3")
+    if "parser.pdf" in selection.components:
+        dependencies.append("pypdf>=6,<7")
+    if "queue.arq" in selection.components:
+        dependencies.extend(["arq>=0.26,<1", "redis>=5,<6"])
+    dependency_value = json.dumps(dependencies)
     return f"""[build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
@@ -89,7 +98,7 @@ build-backend = "setuptools.build_meta"
 name = "{dist}"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = {dependencies}
+dependencies = {dependency_value}
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -107,15 +116,21 @@ CMD ["python", "-m", "{package}.app"]
 """
 
 
-def _compose() -> str:
-    return """services:
+def _compose(selection: Selection) -> str:
+    redis = """
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+""" if "queue.arq" in selection.components else ""
+    return f"""services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: rag
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+      POSTGRES_PASSWORD: ${{POSTGRES_PASSWORD:-local-development-only}}
       POSTGRES_DB: rag
     ports: ["5432:5432"]
+{redis}
 """
 
 
@@ -195,6 +210,39 @@ def authorize_tenant(requested_tenant: str, authenticated_tenant: str) -> None:
     """Call before retrieval so unauthorized rows never enter the result set."""
     if requested_tenant != authenticated_tenant:
         raise PermissionError("tenant access denied")
+'''
+
+
+def _parsers_source() -> str:
+    return '''"""Safe, format-aware document extraction adapters."""
+from pathlib import Path
+
+
+def extract_text(path: Path) -> tuple[str, dict[str, object]]:
+    suffix = path.suffix.lower()
+    if suffix in {".txt", ".md"}:
+        return path.read_text(encoding="utf-8", errors="replace"), {
+            "parser": "plain-text", "format": suffix.lstrip(".")
+        }
+    if suffix == ".pdf":
+        return extract_pdf(path)
+    raise ValueError(f"unsupported document type: {suffix}")
+
+
+def extract_pdf(path: Path) -> tuple[str, dict[str, object]]:
+    from pypdf import PdfReader
+
+    reader = PdfReader(path)
+    pages: list[str] = []
+    empty_pages = 0
+    for number, page in enumerate(reader.pages, 1):
+        text = (page.extract_text() or "").strip()
+        empty_pages += int(not text)
+        pages.append(f"[Page: {number}]\\n{text}")
+    return "\\n\\n".join(pages), {
+        "parser": "pypdf", "pages": len(reader.pages),
+        "empty_pages": empty_pages, "ocr_required": empty_pages > 0,
+    }
 '''
 
 
@@ -282,6 +330,27 @@ class OpenAIEmbeddingProvider:
 def _retrieval_source() -> str:
     return '''"""Provider-independent rank fusion and retrieval evaluation."""
 from collections import defaultdict
+import re
+
+
+def keyword_rank(query: str, chunks: dict[str, str]) -> list[str]:
+    """Deterministic lexical baseline; replace with PostgreSQL FTS in production."""
+    terms = set(re.findall(r"\\w+", query.lower()))
+    scored = []
+    for chunk_id, text in chunks.items():
+        tokens = re.findall(r"\\w+", text.lower())
+        score = sum(token in terms for token in tokens)
+        if score:
+            scored.append((chunk_id, score))
+    return [chunk_id for chunk_id, _ in sorted(scored, key=lambda item: (-item[1], item[0]))]
+
+
+def hybrid_retrieve(
+    vector_ranking: list[str], keyword_ranking: list[str], limit: int = 10
+) -> list[str]:
+    return [chunk_id for chunk_id, _ in reciprocal_rank_fusion(
+        [vector_ranking, keyword_ranking]
+    )[:limit]]
 
 
 def reciprocal_rank_fusion(
@@ -332,6 +401,31 @@ def ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
 
 def citation(chunk_id: str, source: str, locator: str) -> dict[str, str]:
     return {"chunk_id": chunk_id, "source": source, "locator": locator}
+'''
+
+
+def _worker_source() -> str:
+    return '''"""Optional ARQ worker settings for restartable ingestion."""
+import os
+
+
+async def ingest_document(ctx: dict, document_id: str) -> dict[str, str]:
+    """Idempotent job boundary; connect parsing, chunking and indexing here."""
+    if not document_id:
+        raise ValueError("document_id is required")
+    return {"document_id": document_id, "status": "ready_for_indexing"}
+
+
+def redis_settings():
+    from arq.connections import RedisSettings
+    return RedisSettings.from_dsn(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+
+
+class WorkerSettings:
+    functions = [ingest_document]
+    redis_settings = redis_settings()
+    max_tries = 3
+    job_timeout = 600
 '''
 
 

@@ -10,7 +10,7 @@
     {
       "id": "parser.pdf", "version": "0.1.0", "category": "parser",
       "name": "PDF parser", "description": "Page-aware PDF extraction with OCR signalling.",
-      "status": "proposed", "provides": ["document_text"],
+      "status": "implemented", "provides": ["document_text"],
       "tradeoffs": "Good for digital PDFs; scanned pages need isolated OCR workers."
     },
     {
@@ -48,7 +48,7 @@
     {
       "id": "store.pgvector", "version": "1.0.0", "category": "vector_store",
       "name": "PostgreSQL with pgvector", "description": "Vector and metadata persistence.",
-      "status": "implemented", "requires": ["embeddings"], "provides": ["vector_index", "metadata_filter"],
+      "status": "implemented", "requires": ["embeddings"], "provides": ["vector_index", "keyword_index", "metadata_filter"],
       "embedding_dimensions": [384, 768, 1536, 3072], "env": ["DATABASE_URL", "POSTGRES_PASSWORD"],
       "tradeoffs": "One operational system for vectors and metadata; tune indexes at scale."
     },
@@ -61,20 +61,20 @@
     {
       "id": "retrieval.hybrid", "version": "0.1.0", "category": "retrieval",
       "name": "Hybrid retrieval", "description": "Vector plus keyword retrieval.",
-      "status": "proposed", "requires": ["vector_index", "keyword_index"],
-      "provides": ["ranked_lists"],
+      "status": "implemented", "requires": ["vector_index", "keyword_index"],
+      "provides": ["ranked_lists", "retrieval_results"],
       "tradeoffs": "Higher recall across semantic and exact queries; more tuning and latency."
     },
     {
       "id": "fusion.rrf", "version": "0.1.0", "category": "fusion",
       "name": "Reciprocal Rank Fusion", "description": "Rank-based list fusion.",
-      "status": "proposed", "requires": ["ranked_lists"], "provides": ["retrieval_results"],
+      "status": "implemented", "requires": ["ranked_lists"], "provides": ["retrieval_results"],
       "tradeoffs": "Robust across unlike score scales; adds fusion parameters."
     },
     {
       "id": "queue.arq", "version": "0.1.0", "category": "queue",
       "name": "Redis/ARQ ingestion", "description": "Restartable background ingestion.",
-      "status": "proposed", "requires": ["chunks"], "provides": ["async_ingestion"],
+      "status": "implemented", "requires": ["chunks"], "provides": ["async_ingestion"],
       "runtime": "async", "env": ["REDIS_URL"],
       "tradeoffs": "Resilient large-file processing; adds Redis and worker operations."
     },
