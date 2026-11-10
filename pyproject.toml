@@ -7,6 +7,7 @@ name = "rag-code-generator"
 version = "0.2.0"
 description = "Deterministic, compatibility-aware RAG project generator"
 requires-python = ">=3.11"
+dependencies = ["fastapi>=0.117,<1"]
 
 [project.scripts]
 raggen = "rag_generator.cli:main"
@@ -27,3 +28,6 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.vercel]
+entrypoint = "app:app"

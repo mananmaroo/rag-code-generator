@@ -1,16 +1,13 @@
-import json
 import unittest
-from http.server import BaseHTTPRequestHandler
-from pathlib import Path
 
-from api.index import handler
+from app import app
 
 
 class VercelConfigurationTests(unittest.TestCase):
-    def test_entrypoint_is_http_handler(self):
-        self.assertTrue(issubclass(handler, BaseHTTPRequestHandler))
+    def test_entrypoint_is_fastapi_application(self):
+        self.assertEqual(app.title, "RAG Studio")
 
-    def test_all_routes_reach_serverless_entrypoint(self):
-        config = json.loads(Path("vercel.json").read_text(encoding="utf-8"))
-        self.assertEqual(config["rewrites"][0]["destination"], "/api/index.py")
+    def test_required_public_routes_exist(self):
+        routes = {route.path for route in app.routes}
+        self.assertTrue({"/", "/api/health", "/api/catalog", "/api/validate"} <= routes)
 

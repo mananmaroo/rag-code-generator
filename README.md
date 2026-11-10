@@ -37,8 +37,8 @@ downloads are built in temporary directories before being returned as ZIP files.
 
 ## Deploy to Vercel
 
-The repository includes a Python serverless entrypoint and `vercel.json`. Connect the
-GitHub repository to Vercel or deploy from the project root. On Vercel, saved
+The repository includes a FastAPI serverless entrypoint configured through
+`[tool.vercel]`. Connect the GitHub repository to Vercel or deploy from the project root. On Vercel, saved
 configurations use ephemeral `/tmp` storage; validation and repository generation are
 stateless and fully supported.
 
