@@ -1,4 +1,5 @@
 import json
+import runpy
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,6 +61,27 @@ class GeneratorTests(unittest.TestCase):
             generate_repository(selection, [catalog["parser.pdf"]], output)
             self.assertIn("pypdf>=6,<7", (output / "pyproject.toml").read_text())
             self.assertIn("def extract_pdf", (output / "src/pdf_demo/parsers.py").read_text())
+
+    def test_all_structured_parsers_add_adapters_and_dependencies(self):
+        catalog = load_catalog()
+        parser_ids = ("parser.csv", "parser.excel", "parser.word", "parser.powerpoint")
+        selection = Selection("documents", parser_ids, {})
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "project"
+            generate_repository(selection, [catalog[item] for item in parser_ids], output)
+            project = (output / "pyproject.toml").read_text()
+            source = (output / "src/documents/parsers.py").read_text()
+            self.assertIn("openpyxl>=3.1,<4", project)
+            self.assertIn("python-docx>=1.1,<2", project)
+            self.assertIn("python-pptx>=1.0,<2", project)
+            for function in ("extract_csv", "extract_excel", "extract_word", "extract_powerpoint"):
+                self.assertIn(f"def {function}", source)
+            sample = output / "sample.csv"
+            sample.write_text("name,score\nAda,10\nLin,9\n", encoding="utf-8")
+            parser_module = runpy.run_path(str(output / "src/documents/parsers.py"))
+            text, metadata = parser_module["extract_text"](sample)
+            self.assertIn("[Row: 2] name: Ada | score: 10", text)
+            self.assertEqual(metadata["rows"], 2)
 
     def test_async_queue_adds_worker_and_redis(self):
         catalog = load_catalog()

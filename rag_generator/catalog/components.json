@@ -14,6 +14,30 @@
       "tradeoffs": "Good for digital PDFs; scanned pages need isolated OCR workers."
     },
     {
+      "id": "parser.csv", "version": "1.0.0", "category": "parser",
+      "name": "CSV parser", "description": "Dialect-aware tabular extraction with headers and row numbers.",
+      "status": "implemented", "provides": ["document_text"],
+      "tradeoffs": "No extra dependency and strong row-level citations; CSV has no rich layout."
+    },
+    {
+      "id": "parser.excel", "version": "1.0.0", "category": "parser",
+      "name": "Excel parser", "description": "XLSX/XLSM extraction preserving sheets, headers, and rows.",
+      "status": "implemented", "provides": ["document_text"],
+      "tradeoffs": "Preserves workbook structure; reads cached formula values and never executes macros."
+    },
+    {
+      "id": "parser.word", "version": "1.0.0", "category": "parser",
+      "name": "Word parser", "description": "DOCX extraction preserving headings, paragraphs, and tables.",
+      "status": "implemented", "provides": ["document_text"],
+      "tradeoffs": "Strong document structure; complex floating layouts may lose visual ordering."
+    },
+    {
+      "id": "parser.powerpoint", "version": "1.0.0", "category": "parser",
+      "name": "PowerPoint parser", "description": "PPTX extraction preserving slides, titles, text, and tables.",
+      "status": "implemented", "provides": ["document_text"],
+      "tradeoffs": "Good slide-level citations; images and diagrams require optional OCR or vision."
+    },
+    {
       "id": "chunker.fixed", "version": "1.0.0", "category": "chunker",
       "name": "Fixed overlap chunker", "description": "Reproducible word-window chunks.",
       "status": "implemented", "requires": ["document_text"], "provides": ["chunks"],

@@ -87,6 +87,12 @@ def _project_toml(selection: Selection, package: str) -> str:
         dependencies.append("openai>=1,<3")
     if "parser.pdf" in selection.components:
         dependencies.append("pypdf>=6,<7")
+    if "parser.excel" in selection.components:
+        dependencies.append("openpyxl>=3.1,<4")
+    if "parser.word" in selection.components:
+        dependencies.append("python-docx>=1.1,<2")
+    if "parser.powerpoint" in selection.components:
+        dependencies.append("python-pptx>=1.0,<2")
     if "queue.arq" in selection.components:
         dependencies.extend(["arq>=0.26,<1", "redis>=5,<6"])
     dependency_value = json.dumps(dependencies)
@@ -215,6 +221,7 @@ def authorize_tenant(requested_tenant: str, authenticated_tenant: str) -> None:
 
 def _parsers_source() -> str:
     return '''"""Safe, format-aware document extraction adapters."""
+import csv
 from pathlib import Path
 
 
@@ -226,6 +233,14 @@ def extract_text(path: Path) -> tuple[str, dict[str, object]]:
         }
     if suffix == ".pdf":
         return extract_pdf(path)
+    if suffix == ".csv":
+        return extract_csv(path)
+    if suffix in {".xlsx", ".xlsm"}:
+        return extract_excel(path)
+    if suffix == ".docx":
+        return extract_word(path)
+    if suffix == ".pptx":
+        return extract_powerpoint(path)
     raise ValueError(f"unsupported document type: {suffix}")
 
 
@@ -243,6 +258,115 @@ def extract_pdf(path: Path) -> tuple[str, dict[str, object]]:
         "parser": "pypdf", "pages": len(reader.pages),
         "empty_pages": empty_pages, "ocr_required": empty_pages > 0,
     }
+
+
+def extract_csv(path: Path) -> tuple[str, dict[str, object]]:
+    with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+        sample = handle.read(8192)
+        handle.seek(0)
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\\t|")
+        except csv.Error:
+            dialect = csv.excel
+        rows = list(csv.reader(handle, dialect))
+    if not rows:
+        return "", {"parser": "csv", "rows": 0, "columns": 0}
+    headers = _headers(rows[0])
+    lines = ["[Table: CSV]", f"[Columns: {' | '.join(headers)}]"]
+    lines.extend(_row(number, headers, values) for number, values in enumerate(rows[1:], 2))
+    return "\\n".join(lines), {
+        "parser": "csv", "rows": len(rows) - 1,
+        "columns": len(headers), "delimiter": dialect.delimiter,
+    }
+
+
+def extract_excel(path: Path) -> tuple[str, dict[str, object]]:
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path, read_only=True, data_only=True)
+    sections: list[str] = []
+    row_count = 0
+    try:
+        for sheet in workbook.worksheets:
+            values = list(sheet.iter_rows(values_only=True))
+            if not values:
+                continue
+            headers = _headers(values[0])
+            sections.extend([f"[Sheet: {sheet.title}]", f"[Columns: {' | '.join(headers)}]"])
+            for number, row in enumerate(values[1:], 2):
+                if any(value not in (None, "") for value in row):
+                    sections.append(_row(number, headers, row))
+                    row_count += 1
+    finally:
+        workbook.close()
+    return "\\n".join(sections), {
+        "parser": "openpyxl", "sheets": len(workbook.sheetnames), "rows": row_count,
+    }
+
+
+def extract_word(path: Path) -> tuple[str, dict[str, object]]:
+    from docx import Document
+
+    document = Document(path)
+    blocks: list[str] = []
+    for paragraph in document.paragraphs:
+        text = paragraph.text.strip()
+        if text:
+            style = paragraph.style.name if paragraph.style else ""
+            blocks.append(f"[Heading: {text}]" if style.lower().startswith("heading") else text)
+    for number, table in enumerate(document.tables, 1):
+        rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+        if rows:
+            headers = _headers(rows[0])
+            blocks.extend([f"[Table: {number}]", f"[Columns: {' | '.join(headers)}]"])
+            blocks.extend(_row(i, headers, row) for i, row in enumerate(rows[1:], 2))
+    return "\\n\\n".join(blocks), {
+        "parser": "python-docx", "paragraphs": len(document.paragraphs),
+        "tables": len(document.tables),
+    }
+
+
+def extract_powerpoint(path: Path) -> tuple[str, dict[str, object]]:
+    from pptx import Presentation
+
+    presentation = Presentation(path)
+    slides: list[str] = []
+    for number, slide in enumerate(presentation.slides, 1):
+        lines = [f"[Slide: {number}]"]
+        title_shape = slide.shapes.title
+        if title_shape and title_shape.text.strip():
+            lines.append(f"[Title: {title_shape.text.strip()}]")
+        for shape in slide.shapes:
+            if shape == title_shape:
+                continue
+            if getattr(shape, "has_text_frame", False) and shape.text.strip():
+                lines.append(shape.text.strip())
+            if getattr(shape, "has_table", False):
+                rows = [[cell.text.strip() for cell in row.cells] for row in shape.table.rows]
+                if rows:
+                    headers = _headers(rows[0])
+                    lines.append(f"[Columns: {' | '.join(headers)}]")
+                    lines.extend(_row(i, headers, row) for i, row in enumerate(rows[1:], 2))
+        slides.append("\\n".join(lines))
+    return "\\n\\n".join(slides), {
+        "parser": "python-pptx", "slides": len(presentation.slides),
+    }
+
+
+def _headers(values) -> list[str]:
+    headers: list[str] = []
+    counts: dict[str, int] = {}
+    for index, value in enumerate(values, 1):
+        base = str(value).strip() if value not in (None, "") else f"column_{index}"
+        counts[base] = counts.get(base, 0) + 1
+        headers.append(base if counts[base] == 1 else f"{base}_{counts[base]}")
+    return headers
+
+
+def _row(number: int, headers, values) -> str:
+    cells = list(values)
+    pairs = [f"{header}: {cells[index] if index < len(cells) else ''}" for index, header in enumerate(headers)]
+    return f"[Row: {number}] " + " | ".join(pairs)
 '''
 
 
